@@ -36,6 +36,12 @@ All storefront assets are included in `dist/`. No backend, build tools or extern
 
 Local ChatGPT Sites registration metadata is excluded; it is not used by Render.
 
+## Link previews
+
+Open Graph and large-image card metadata in `dist/index.html` uses the live URL `https://gifts-boutique.onrender.com/`. The 1200 x 630 JPEG is `dist/assets/maison-aurelle-share-v1.jpg`. Update the absolute metadata URLs if the domain changes. Previews are controlled and cached by the sharing app; this project cannot guarantee a specific WhatsApp layout.
+
+The optional `tools/render-share-card.cjs` artwork exporter uses `@napi-rs/canvas` with the bundled fonts. The JPEG is already committed, so Render needs no additional dependencies or build step. Run all checks with `node --test tests/*.test.cjs`.
+
 ## Imagery
 
 Original concept images generated with the built-in image generation tool, then converted to JPEG for delivery. Final project assets:
