@@ -161,6 +161,7 @@ dialog::backdrop{background:#231d208c;backdrop-filter:blur(5px)}
 .close-button{font-size:28px;width:44px;height:44px;flex-shrink:0;border:1px solid var(--line)}
 .close-button:hover{background:var(--paper)}
 .dialog-body{padding:32px}
+.dialog-status{position:sticky;top:0;z-index:2;background:var(--paper);border-bottom:1px solid var(--line);padding:14px 24px;font-size:14px;color:var(--wine)}
 .product-detail{display:grid;grid-template-columns:1fr 1fr;gap:32px}
 .product-detail>img{width:100%;aspect-ratio:4/5}
 .product-detail p{font-size:15px;color:var(--muted);margin:14px 0}

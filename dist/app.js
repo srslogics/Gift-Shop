@@ -17,6 +17,11 @@
   let returnFocus = null;
   let toastTimeout;
   function announce(message) {
+    if (modal.open) {
+      const status = modal.querySelector('.dialog-status');
+      status.hidden = false; status.textContent = message;
+      return;
+    }
     const toast = document.querySelector('#toast');
     clearTimeout(toastTimeout); toast.textContent = message; toast.hidden = false;
     toastTimeout = setTimeout(() => { toast.hidden = true; }, 3500);
@@ -48,7 +53,8 @@
   function openDialog(title, content, { eyebrow = 'MAISON AURELLE', bag = false } = {}) {
     if (!modal.open) returnFocus = document.activeElement;
     modal.classList.toggle('bag-dialog', bag);
-    modalContent.innerHTML = `<header class="dialog-header"><div><p class="eyebrow">${eyebrow}</p><h2 id="dialog-title">${title}</h2></div><button class="close-button" data-action="close" aria-label="Close dialog">×</button></header><div class="dialog-body">${content}</div>`;
+    modalContent.innerHTML = `<header class="dialog-header"><div><p class="eyebrow">${eyebrow}</p><h2 id="dialog-title">${title}</h2></div><button class="close-button" data-action="close" aria-label="Close dialog">×</button></header><p class="dialog-status" role="status" hidden></p><div class="dialog-body">${content}</div>`;
+    document.querySelector('#toast').hidden = true;
     document.body.classList.add('modal-open');
     if (!modal.open) modal.showModal();
     modal.scrollTop = 0;
@@ -69,7 +75,8 @@
         status = document.createElement('p'); status.className = 'add-confirmation'; status.setAttribute('role', 'status');
         modal.querySelector('[data-add]').after(status);
       }
-      status.textContent = `Added to your bag (${totals(state.bag).count} items)`;
+      const { count } = totals(state.bag);
+      status.textContent = `Added to your bag (${count} item${count === 1 ? '' : 's'})`;
     } else {
       showBag();
     }
@@ -108,19 +115,23 @@
   const actions = {
     close: () => modal.close(),
     search: showSearch, bag: showBag, finder: showFinder, bespoke: showBespoke, review:showReview,
-    browse: () => { modal.close(); document.querySelector('#collection').scrollIntoView(); },
+    browse: () => { actions['reset-filters'](); modal.close(); returnFocus = document.querySelector('[data-filter="All"]'); document.querySelector('#collection').scrollIntoView(); },
     saved: () => { showSaved = !showSaved; renderCollection(); },
     'reset-filters': () => { filter = 'All'; occasion = ''; query = ''; showSaved = false; document.querySelector('#collection-search').value = ''; renderCollection(); document.querySelector('[data-filter="All"]').focus(); },
-    'clear-occasion': () => { occasion = ''; renderCollection(); },
+    'clear-occasion': () => { occasion = ''; renderCollection(); document.querySelector('[data-filter="All"]').focus(); },
     'download-selection': () => { download('maison-aurelle-gift-selection.txt',selectionText()); announce('Your selection is ready to save. No order was placed.'); },
     menu: () => openDialog('A thoughtful place to begin.', '<nav class="menu-list" aria-label="Mobile navigation"><a href="#collection" data-action="close">The collection</a><a href="#occasions" data-action="close">By occasion</a><a href="#our-story" data-action="close">Our philosophy</a><button data-action="finder">Find a gift</button><button data-action="bespoke">Bespoke gifting</button></nav>'),
     faq: () => openDialog('A little guidance.', '<div class="faq-list"><details open><summary>Can I order these gifts?</summary><p>Not yet. This is an interactive boutique concept with fictional products, AI-generated imagery and sample prices. It does not accept payments or orders.</p></details><details><summary>Can I add a personal note?</summary><p>Yes. Add a message of up to 240 characters in your bag. Your note is saved on this device and included in your downloadable selection.</p></details><details><summary>Where do you deliver?</summary><p>Delivery regions, timelines, charges and returns will be defined when the real shop and fulfilment partners are confirmed.</p></details><details><summary>Can I create corporate or celebration gifts?</summary><p>The bespoke brief tool lets you outline an occasion, quantity, budget and story. Download the brief for discussion; it is not sent to a sales team.</p></details></div>'),
-    privacy: () => openDialog('A thoughtful approach to privacy.', '<div class="prose"><h3>What this concept stores</h3><p>Your bag, saved pieces and optional gift note are stored in your browser on this device. They are not submitted to a shop server. Avoid entering sensitive information.</p><h3>What stays with you</h3><p>Searches and bespoke form fields are used only on this page. Downloaded selections and briefs are files on your device. There are no analytics scripts or external image requests in the storefront.</p><p>If you are viewing the private hosted version, the hosting platform separately manages sign-in and service logs under its own policies.</p><button class="button primary" data-action="clear-data">Clear my local shop data <span>×</span></button></div>'),
+    privacy: () => openDialog('A thoughtful approach to privacy.', '<div class="prose"><h3>What this concept stores</h3><p>Your bag, saved pieces and optional gift note are stored in your browser on this device. They are not submitted to a shop server. Avoid entering sensitive information, especially on a shared device.</p><h3>What stays with you</h3><p>Searches and bespoke form fields are used only on this page. Downloaded selections and briefs are files on your device. There are no analytics scripts or third-party image requests in the storefront.</p><p>This demo is publicly accessible. Render and its delivery infrastructure process normal website requests and may retain service logs under their own policies. The shop itself does not collect contact or payment details.</p><button class="button primary" data-action="clear-data">Clear my local shop data <span>×</span></button></div>'),
     'clear-data': () => { state = cleanState(null); persist(); renderCollection(); modal.close(); announce('Your bag, saved pieces and message have been cleared.'); },
     'about-demo': () => openDialog('The beginning of a beautiful boutique.', '<div class="prose"><p>Maison Aurelle is a working brand concept created by SS49 to explore a luxury gifting experience. It is not an established merchant.</p><p>The catalogue, prices in INR and AI-generated product photographs are illustrative. Search, saved pieces, the gift finder and bag work locally. Briefs can be downloaded, but no enquiries, payments or orders are submitted.</p><h3>Before a real launch</h3><p>The final brand, product catalogue, verified specifications, inventory, payments, shipping, customer support and store policies must be connected and approved.</p></div>')
   };
   document.addEventListener('click', event => {
     const button = event.target.closest('button,a'); if (!button) return;
+    if (modal.open && button.matches('a[href^="#"]') && button.getAttribute('href').length > 1) {
+      const target = document.querySelector(button.getAttribute('href'));
+      if (target) { target.setAttribute('tabindex', '-1'); returnFocus = target; }
+    }
     if (button.dataset.action && actions[button.dataset.action]) actions[button.dataset.action]();
     if (button.dataset.product) showProduct(button.dataset.product);
     if (button.dataset.add) add(button.dataset.add);
