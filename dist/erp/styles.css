@@ -4,3 +4,16 @@
 @media(max-width:930px){.layout{grid-template-columns:1fr}.stack{display:grid;grid-template-columns:1fr 1fr}.metrics{grid-template-columns:repeat(2,1fr)}.card-grid{grid-template-columns:repeat(2,1fr)}.kanban{grid-template-columns:1fr}.promo{min-height:220px}.bottom-grid{grid-template-columns:1fr 1fr}.heading-actions{flex-wrap:wrap;justify-content:end}.toolbar{align-items:start;flex-direction:column}.search{width:100%}.page-heading{align-items:start}.date-control{display:none}}
 @media(max-width:680px){#sidebar{transform:translateX(-100%);width:238px;transition:transform .2s}body.nav-open #sidebar{transform:translateX(0);box-shadow:20px 0 100px #0004}.shell{margin-left:0}.mobile-toggle{display:block}.topbar{height:64px;padding:0 18px;gap:12px}.breadcrumb{margin-right:auto;font-size:10px}.breadcrumb span{margin-inline:6px}.top-actions{gap:10px}.top-actions .icon-btn,.top-avatar{display:none}.demo-pill{font-size:7px;padding:5px}.topbar .mobile-toggle{z-index:40}main{padding:24px 18px}h1{font-size:34px}.page-heading{flex-wrap:wrap;gap:15px}.heading-actions{justify-content:start}.subheading{font-size:10px}.metrics{gap:10px;margin-bottom:18px}.metric{padding:14px}.metric-value{font-size:29px}.metric-foot{font-size:8px}.layout,.bottom-grid,.stack{display:flex;flex-direction:column;gap:18px}.bottom-grid{margin-top:18px}.card-grid{grid-template-columns:1fr}.hamper-photo{height:210px}.panel-head{padding:17px}.panel-head h2{font-size:23px}.app-footer{margin:0 18px;flex-wrap:wrap;gap:8px 14px}.footer-brand{display:none}#toast{left:50%;width:90%;font-size:11px}.dialog-head{padding:20px}.dialog-body{padding:20px}.form-grid{gap:14px}.form-grid .field{grid-column:1/-1}.dialog-head h2{font-size:29px}.toolbar{padding:15px}.filters{gap:3px}.filter{padding:6px 8px}.chart-row{grid-template-columns:110px 1fr 40px;gap:8px}.promo{min-height:190px}.table-bottom{padding:12px 16px}}
 @media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important;transition:none!important}}
+
+/* Navigation stays usable on short screens and narrow viewports. */
+#sidebar{overflow-y:auto;overscroll-behavior:contain;height:100dvh}
+#sidebar>.brand,#sidebar>nav,#sidebar>.workspace-label,#sidebar>.sidebar-bottom{flex-shrink:0}
+.sidebar-close,.nav-backdrop{display:none}
+@media(max-width:680px){
+ #sidebar{visibility:hidden;transition:transform .2s,visibility .2s;padding-top:48px}
+ body.nav-open{overflow:hidden}
+ body.nav-open #sidebar{visibility:visible}
+ .sidebar-close{display:block;position:absolute;right:12px;top:10px;color:#fff7e9;font-size:25px;width:34px;height:34px}
+ .nav-backdrop:not([hidden]){display:block;position:fixed;inset:0;background:#23151c65;z-index:25}
+ .topbar .mobile-toggle{z-index:auto}
+}
