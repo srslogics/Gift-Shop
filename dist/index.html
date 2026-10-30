@@ -30,6 +30,7 @@
   <link rel="preload" href="assets/gift-atelier.jpg" as="image" fetchpriority="high">
   <link rel="stylesheet" href="styles.css">
   <script src="catalog.js" defer></script>
+  <script src="storage.js" defer></script>
   <script src="app.js" defer></script>
 </head>
 <body>
@@ -41,6 +42,7 @@
     <a class="wordmark" href="#" aria-label="Maison Aurelle home"><span>MAISON</span>AURELLE<span class="wordmark-sub">THE ART OF GIVING</span></a>
     <nav class="nav-right" aria-label="Shopping navigation"><button class="desktop-concierge" data-action="bespoke">Bespoke gifting</button><button class="icon-button" data-action="search" aria-label="Search gifts"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/></svg></button><button class="bag-button" data-action="bag" aria-label="Open shopping bag, 0 items"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h14l1 14H4L5 7Z M8 8V6a4 4 0 0 1 8 0v2"/></svg><span class="bag-count">0</span></button></nav>
   </header>
+  <p id="storage-warning" class="storage-warning" role="status" hidden>Your changes are temporary for this visit. Browser storage is unavailable; download your selection to keep a copy.</p>
   <main id="main">
     <section class="hero" aria-labelledby="hero-title">
       <div class="hero-copy">

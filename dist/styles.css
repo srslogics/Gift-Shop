@@ -258,3 +258,7 @@ button.mini-product:hover{background:var(--paper)}
   .filter-tabs button[aria-pressed=true]{background:var(--wine);color:var(--ivory);border-color:var(--wine)}
 }
 @media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}*,*::before,*::after{animation:none!important;transition:none!important}}
+
+/* Keep keyboard focus visible against the dark brand backgrounds. */
+.announcement :focus-visible,.bespoke :focus-visible{outline-color:var(--ivory)}
+.storage-warning{padding:14px var(--gutter);background:var(--paper);border-bottom:1px solid var(--line);font-size:14px}
