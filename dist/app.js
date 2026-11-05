@@ -1,14 +1,19 @@
 (() => {
   'use strict';
   const { products, byId, money, filterProducts, cleanState, updateBag, totals } = window.Aurelle;
-  const STORAGE_KEY = 'maison-aurelle-concept-v1';
   const modal = document.querySelector('#modal');
   const modalContent = document.querySelector('#modal-content');
   const grid = document.querySelector('#product-grid');
   const escape = value => String(value).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const heart = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1.1-1.1a5.5 5.5 0 0 0-7.8 7.8L12 21l8.8-8.6a5.5 5.5 0 0 0 0-7.8Z"/></svg>';
-  let state;
-  try { state = cleanState(JSON.parse(localStorage.getItem(STORAGE_KEY))); } catch { state = cleanState(null); }
+  // Accessing localStorage itself can throw when browser storage is disabled.
+  let storage;
+  try { storage = window.localStorage; } catch { storage = null; }
+  const shop = window.AurelleStorage.createStore({ storage, cleanState, locks: window.navigator?.locks, onChange: syncView });
+  let state = shop.get();
+  let surface = '';
+  let changesSaved = true;
+  window.addEventListener('storage', event => shop.sync(event));
   let filter = 'All';
   let occasion = '';
   let showSaved = false;
@@ -26,16 +31,39 @@
     clearTimeout(toastTimeout); toast.textContent = message; toast.hidden = false;
     toastTimeout = setTimeout(() => { toast.hidden = true; }, 3500);
   }
-  function persist() {
-    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch { /* The bag remains usable for this visit when storage is unavailable. */ }
+  function refreshCounts() {
     const { count } = totals(state.bag);
     document.querySelector('.bag-count').textContent = count;
     document.querySelector('.bag-button').setAttribute('aria-label', `Open shopping bag, ${count} item${count === 1 ? '' : 's'}`);
     document.querySelector('#saved-count').textContent = state.saved.length;
   }
+  async function changeState(change) {
+    const result = await shop.update(change);
+    state = result.state; refreshCounts();
+    changesSaved = result.saved;
+    document.querySelector('#storage-warning').hidden = result.saved;
+    const warning = modal.querySelector('.storage-warning');
+    if (warning) warning.hidden = result.saved;
+    return result.saved;
+  }
+  function syncView(next) {
+    state = next; refreshCounts();
+    const active = document.activeElement;
+    const selector = active?.id ? `#${CSS.escape(active.id)}` :
+      active?.dataset.quantity ? `[data-quantity="${CSS.escape(active.dataset.quantity)}"][data-delta="${active.dataset.delta}"]` :
+      active?.dataset.save ? `[data-save="${CSS.escape(active.dataset.save)}"]` : null;
+    const selection = active?.id === 'gift-note' ? [active.selectionStart, active.selectionEnd] : null;
+    renderCollection();
+    if (modal.open && surface === 'bag') showBag();
+    else if (modal.open && surface === 'review') showReview();
+    if (selector) {
+      const target = document.querySelector(selector);
+      if (target && !target.disabled) { target.focus(); if (selection) target.setSelectionRange(...selection); }
+    }
+  }
   function productCard(p) {
     const saved = state.saved.includes(p.id);
-    return `<article class="product-card"><div class="product-visual"><button class="product-image-button" data-product="${p.id}" aria-label="Explore ${p.name}"><img src="assets/${p.image}" width="600" height="750" loading="lazy" alt="${p.name}: ${p.subtitle}"></button><button class="save-button" data-save="${p.id}" aria-label="${saved ? 'Unsave' : 'Save'} ${p.name}" aria-pressed="${saved}">${heart}</button><span class="product-label">${p.label}</span></div><div class="product-info"><div class="product-info-top"><h3><button data-product="${p.id}">${p.name}</button></h3><span class="product-price">${money(p.price)}</span></div><p>${p.subtitle}</p><button class="quick-add" data-add="${p.id}" aria-label="Add ${p.name} to bag">Add to bag <span aria-hidden="true">+</span></button></div></article>`;
+    return `<article class="product-card"><div class="product-visual"><button class="product-image-button" data-product="${escape(p.id)}" aria-label="Explore ${escape(p.name)}"><img src="assets/${escape(encodeURIComponent(p.image))}" width="600" height="750" loading="lazy" alt="${escape(p.name)}: ${escape(p.subtitle)}"></button><button class="save-button" data-save="${escape(p.id)}" aria-label="${saved ? 'Unsave' : 'Save'} ${escape(p.name)}" aria-pressed="${saved}">${heart}</button><span class="product-label">${escape(p.label)}</span></div><div class="product-info"><div class="product-info-top"><h3><button data-product="${escape(p.id)}">${escape(p.name)}</button></h3><span class="product-price">${money(p.price)}</span></div><p>${escape(p.subtitle)}</p><button class="quick-add" data-add="${escape(p.id)}" aria-label="Add ${escape(p.name)} to bag">Add to bag <span aria-hidden="true">+</span></button></div></article>`;
   }
   function renderCollection() {
     const visible = filterProducts({category: filter, occasion, query, saved: showSaved ? state.saved : null});
@@ -51,25 +79,30 @@
     document.querySelector('.reset-filters').hidden = !(filter !== 'All' || occasion || query || showSaved);
   }
   function openDialog(title, content, { eyebrow = 'MAISON AURELLE', bag = false } = {}) {
+    surface = '';
     if (!modal.open) returnFocus = document.activeElement;
     modal.classList.toggle('bag-dialog', bag);
-    modalContent.innerHTML = `<header class="dialog-header"><div><p class="eyebrow">${eyebrow}</p><h2 id="dialog-title">${title}</h2></div><button class="close-button" data-action="close" aria-label="Close dialog">×</button></header><p class="dialog-status" role="status" hidden></p><div class="dialog-body">${content}</div>`;
+    modalContent.innerHTML = `<header class="dialog-header"><div><p class="eyebrow">${escape(eyebrow)}</p><h2 id="dialog-title">${title}</h2></div><button class="close-button" data-action="close" aria-label="Close dialog">×</button></header><p class="storage-warning" role="status" ${changesSaved ? 'hidden' : ''}>Your changes are temporary for this visit. Download your selection to keep a copy.</p><p class="dialog-status" role="status" hidden></p><div class="dialog-body">${content}</div>`;
     document.querySelector('#toast').hidden = true;
     document.body.classList.add('modal-open');
     if (!modal.open) modal.showModal();
     modal.scrollTop = 0;
     (modal.querySelector('[autofocus]') || modal.querySelector('.close-button')).focus();
   }
-  function miniProduct(p) { return `<button class="mini-product" data-product="${p.id}"><img src="assets/${p.image}" alt="" width="65" height="75"><div><h3>${p.name}</h3><p>${p.category} · ${money(p.price)}</p></div><span aria-hidden="true">↗</span></button>`; }
+  function miniProduct(p) { return `<button class="mini-product" data-product="${escape(p.id)}"><img src="assets/${escape(encodeURIComponent(p.image))}" alt="" width="65" height="75"><div><h3>${escape(p.name)}</h3><p>${escape(p.category)} · ${money(p.price)}</p></div><span aria-hidden="true">↗</span></button>`; }
   function showProduct(id) {
     const p = byId(id); if (!p) return;
-    openDialog(p.name, `<div class="product-detail"><img src="assets/${p.image}" alt="${p.name}: illustrative product photography" width="600" height="750"><div><p class="detail-price">${money(p.price)}</p><p>${p.description}</p><h3>A look inside</h3><ul>${p.contents.map(c => `<li>${c}</li>`).join('')}</ul><button class="button primary" data-add="${p.id}">Add to bag <span>+</span></button><button class="text-link" data-action="bag">View your bag <span>→</span></button><p class="product-disclaimer">${p.note} No live purchases are available.</p></div></div>`, {eyebrow: `${p.category.toUpperCase()} / CONCEPT COLLECTION`});
+    openDialog(escape(p.name), `<div class="product-detail"><img src="assets/${escape(encodeURIComponent(p.image))}" alt="${escape(p.name)}: illustrative product photography" width="600" height="750"><div><p class="detail-price">${money(p.price)}</p><p>${escape(p.description)}</p><h3>A look inside</h3><ul>${p.contents.map(c => `<li>${escape(c)}</li>`).join('')}</ul><button class="button primary" data-add="${escape(p.id)}">Add to bag <span>+</span></button><button class="text-link" data-action="bag">View your bag <span>→</span></button><p class="product-disclaimer">${escape(p.note)} No live purchases are available.</p></div></div>`, {eyebrow: `${p.category.toUpperCase()} / CONCEPT COLLECTION`});
   }
-  function add(id) {
+  async function add(id) {
     const p = byId(id); if (!p) return;
-    if ((state.bag.find(l => l.id === id)?.qty || 0) >= 10) return announce('You can add up to 10 of each piece in this demo.');
-    state.bag = updateBag(state.bag, id, 1); persist();
-    if (modal.open) {
+    let capped = false;
+    await changeState(current => {
+      capped = (current.bag.find(l => l.id === id)?.qty || 0) >= 10;
+      current.bag = updateBag(current.bag, id, 1); return current;
+    });
+    if (capped) return announce('You can add up to 10 of each piece in this demo.');
+    if (modal.open && modal.querySelector('[data-add]')) {
       let status = modal.querySelector('.add-confirmation');
       if (!status) {
         status = document.createElement('p'); status.className = 'add-confirmation'; status.setAttribute('role', 'status');
@@ -83,12 +116,14 @@
   }
   function showBag() {
     const total = totals(state.bag);
-    const content = state.bag.length ? `${state.bag.map(line => { const p = byId(line.id); return `<div class="bag-line"><img src="assets/${p.image}" width="90" height="110" alt="${p.name}"><div class="bag-line-body"><h3>${p.name}</h3><p>${money(p.price * line.qty)}</p><div class="quantity"><button data-quantity="${p.id}" data-delta="-1" aria-label="Decrease ${p.name} quantity">−</button><span aria-label="Quantity ${line.qty}">${line.qty}</span><button data-quantity="${p.id}" data-delta="1" aria-label="Increase ${p.name} quantity" ${line.qty === 10 ? 'disabled' : ''}>+</button></div><button class="remove-line" data-remove="${p.id}" aria-label="Remove ${p.name}">Remove</button></div></div>`; }).join('')}<div class="form-field bag-note"><label for="gift-note">A few words, from you</label><textarea id="gift-note" maxlength="240" placeholder="A thoughtful message for their card...">${escape(state.note)}</textarea><span class="muted">Optional · up to 240 characters · saved on this device</span></div><div class="bag-totals"><span>Illustrative subtotal</span><strong>${money(total.amount)}</strong></div><div class="bag-actions"><p class="muted">Sample prices only. Shipping, tax and fulfilment are not configured.</p><button class="button primary" data-action="review">Review gift selection <span>→</span></button><p class="muted">This is a concept preview. No payment will be taken and no order will be placed.</p><button class="text-link" data-action="close">Continue exploring</button></div>` : '<div class="empty-state"><h3>A thoughtful gesture starts here.</h3><p>Your bag is waiting for something lovely.</p><button class="button primary" data-action="browse">Explore the collection <span>↗</span></button></div>';
+    const content = state.bag.length ? `${state.bag.map(line => { const p = byId(line.id); return `<div class="bag-line"><img src="assets/${escape(encodeURIComponent(p.image))}" width="90" height="110" alt="${escape(p.name)}"><div class="bag-line-body"><h3>${escape(p.name)}</h3><p>${money(p.price * line.qty)}</p><div class="quantity"><button data-quantity="${escape(p.id)}" data-delta="-1" aria-label="Decrease ${escape(p.name)} quantity">−</button><span aria-label="Quantity ${line.qty}">${line.qty}</span><button data-quantity="${escape(p.id)}" data-delta="1" aria-label="Increase ${escape(p.name)} quantity" ${line.qty === 10 ? 'disabled' : ''}>+</button></div><button class="remove-line" data-remove="${escape(p.id)}" aria-label="Remove ${escape(p.name)}">Remove</button></div></div>`; }).join('')}<div class="form-field bag-note"><label for="gift-note">A few words, from you</label><textarea id="gift-note" maxlength="240" placeholder="A thoughtful message for their card...">${escape(state.note)}</textarea><span class="muted">Optional · up to 240 characters · stored on this device when available</span></div><div class="bag-totals"><span>Illustrative subtotal</span><strong>${money(total.amount)}</strong></div><div class="bag-actions"><p class="muted">Sample prices only. Shipping, tax and fulfilment are not configured.</p><button class="button primary" data-action="review">Review gift selection <span>→</span></button><p class="muted">This is a concept preview. No payment will be taken and no order will be placed.</p><button class="text-link" data-action="close">Continue exploring</button></div>` : '<div class="empty-state"><h3>A thoughtful gesture starts here.</h3><p>Your bag is waiting for something lovely.</p><button class="button primary" data-action="browse">Explore the collection <span>↗</span></button></div>';
     openDialog(`Your gift bag <small>(${total.count})</small>`, content, {bag:true, eyebrow:'YOUR CONSIDERED SELECTION'});
+    surface = 'bag';
   }
   function showReview() {
     if (!state.bag.length) return showBag();
-    openDialog('A lovely selection.', `<p class="dialog-intro">Here is your gifting plan.</p>${state.bag.map(l => `<div class="mini-product"><div><h3>${byId(l.id).name}</h3><p>Quantity: ${l.qty}</p></div><span>${money(byId(l.id).price * l.qty)}</span></div>`).join('')}<div class="bag-totals"><span>Illustrative subtotal</span><strong>${money(totals(state.bag).amount)}</strong></div>${state.note ? `<h3>Your message</h3><p style="white-space:pre-wrap;margin-top:12px">${escape(state.note)}</p>` : ''}<div class="dialog-disclaimer">No order has been placed. This preview does not collect payment or delivery details. Save the selection as a text file, or continue exploring.</div><button class="button primary" data-action="download-selection">Download my selection <span>↓</span></button><button class="text-link" data-action="bag" style="margin-left:20px">Edit bag</button>`);
+    openDialog('A lovely selection.', `<p class="dialog-intro">Here is your gifting plan.</p>${state.bag.map(l => `<div class="mini-product"><div><h3>${escape(byId(l.id).name)}</h3><p>Quantity: ${l.qty}</p></div><span>${money(byId(l.id).price * l.qty)}</span></div>`).join('')}<div class="bag-totals"><span>Illustrative subtotal</span><strong>${money(totals(state.bag).amount)}</strong></div>${state.note ? `<h3>Your message</h3><p style="white-space:pre-wrap;margin-top:12px">${escape(state.note)}</p>` : ''}<div class="dialog-disclaimer">No order has been placed. This preview does not collect payment or delivery details. Save the selection as a text file, or continue exploring.</div><button class="button primary" data-action="download-selection">Download my selection <span>↓</span></button><button class="text-link" data-action="bag" style="margin-left:20px">Edit bag</button>`);
+    surface = 'review';
   }
   function showFinder() {
     openDialog('A gift that feels like them.', `<p class="dialog-intro">Tell us a little about the moment.</p><form id="finder-form"><div class="field-grid"><div class="form-field"><label for="finder-occasion">What is the occasion?</label><select id="finder-occasion" name="occasion"><option value="">Any thoughtful moment</option><option>Birthday</option><option>Thank you</option><option>Housewarming</option><option>Just because</option></select></div><div class="form-field"><label for="finder-budget">Your budget</label><select id="finder-budget" name="budget"><option value="999999">Open to something lovely</option><option value="3000">Up to ₹3,000</option><option value="5000">Up to ₹5,000</option><option value="7000">Up to ₹7,000</option></select></div></div><button class="button primary" type="submit">Find my gifts <span>↗</span></button></form><div id="finder-results" class="finder-results" aria-live="polite"></div>`, {eyebrow:'THE GIFT FINDER'});
@@ -114,47 +149,53 @@
   }
   const actions = {
     close: () => modal.close(),
-    search: showSearch, bag: showBag, finder: showFinder, bespoke: showBespoke, review:showReview,
+    search: showSearch, bag: showBag, finder: showFinder, bespoke: showBespoke, review: async () => { state = await shop.ready(); showReview(); },
     browse: () => { actions['reset-filters'](); modal.close(); returnFocus = document.querySelector('[data-filter="All"]'); document.querySelector('#collection').scrollIntoView(); },
     saved: () => { showSaved = !showSaved; renderCollection(); },
     'reset-filters': () => { filter = 'All'; occasion = ''; query = ''; showSaved = false; document.querySelector('#collection-search').value = ''; renderCollection(); document.querySelector('[data-filter="All"]').focus(); },
     'clear-occasion': () => { occasion = ''; renderCollection(); document.querySelector('[data-filter="All"]').focus(); },
-    'download-selection': () => { download('maison-aurelle-gift-selection.txt',selectionText()); announce('Your selection is ready to save. No order was placed.'); },
+    'download-selection': async () => { state = await shop.ready(); download('maison-aurelle-gift-selection.txt',selectionText()); announce('Your selection is ready to save. No order was placed.'); },
     menu: () => openDialog('A thoughtful place to begin.', '<nav class="menu-list" aria-label="Mobile navigation"><a href="#collection" data-action="close">The collection</a><a href="#occasions" data-action="close">By occasion</a><a href="#our-story" data-action="close">Our philosophy</a><button data-action="finder">Find a gift</button><button data-action="bespoke">Bespoke gifting</button></nav>'),
     faq: () => openDialog('A little guidance.', '<div class="faq-list"><details open><summary>Can I order these gifts?</summary><p>Not yet. This is an interactive boutique concept with fictional products, AI-generated imagery and sample prices. It does not accept payments or orders.</p></details><details><summary>Can I add a personal note?</summary><p>Yes. Add a message of up to 240 characters in your bag. Your note is saved on this device and included in your downloadable selection.</p></details><details><summary>Where do you deliver?</summary><p>Delivery regions, timelines, charges and returns will be defined when the real shop and fulfilment partners are confirmed.</p></details><details><summary>Can I create corporate or celebration gifts?</summary><p>The bespoke brief tool lets you outline an occasion, quantity, budget and story. Download the brief for discussion; it is not sent to a sales team.</p></details></div>'),
     privacy: () => openDialog('A thoughtful approach to privacy.', '<div class="prose"><h3>What this concept stores</h3><p>Your bag, saved pieces and optional gift note are stored in your browser on this device. They are not submitted to a shop server. Avoid entering sensitive information, especially on a shared device.</p><h3>What stays with you</h3><p>Searches and bespoke form fields are used only on this page. Downloaded selections and briefs are files on your device. There are no analytics scripts or third-party image requests in the storefront.</p><p>This demo is publicly accessible. Render and its delivery infrastructure process normal website requests and may retain service logs under their own policies. The shop itself does not collect contact or payment details.</p><button class="button primary" data-action="clear-data">Clear my local shop data <span>×</span></button></div>'),
-    'clear-data': () => { state = cleanState(null); persist(); renderCollection(); modal.close(); announce('Your bag, saved pieces and message have been cleared.'); },
+    'clear-data': async () => {
+      const result = await shop.clear(); changesSaved = result.saved; state = result.state; refreshCounts(); renderCollection();
+      document.querySelector('#storage-warning').hidden = result.saved;
+      if (result.saved) { modal.close(); announce('Your bag, saved pieces and message have been cleared.'); }
+      else announce('Cleared for this visit, but browser storage could not be cleared. Use your browser’s site-data settings to remove previously saved data.');
+    },
     'about-demo': () => openDialog('The beginning of a beautiful boutique.', '<div class="prose"><p>Maison Aurelle is a working brand concept created by SS49 to explore a luxury gifting experience. It is not an established merchant.</p><p>The catalogue, prices in INR and AI-generated product photographs are illustrative. Search, saved pieces, the gift finder and bag work locally. Briefs can be downloaded, but no enquiries, payments or orders are submitted.</p><h3>Before a real launch</h3><p>The final brand, product catalogue, verified specifications, inventory, payments, shipping, customer support and store policies must be connected and approved.</p></div>')
   };
-  document.addEventListener('click', event => {
+  document.addEventListener('click', async event => {
     const button = event.target.closest('button,a'); if (!button) return;
     if (modal.open && button.matches('a[href^="#"]') && button.getAttribute('href').length > 1) {
       const target = document.querySelector(button.getAttribute('href'));
       if (target) { target.setAttribute('tabindex', '-1'); returnFocus = target; }
     }
-    if (button.dataset.action && actions[button.dataset.action]) actions[button.dataset.action]();
+    if (button.dataset.action && actions[button.dataset.action]) await actions[button.dataset.action]();
     if (button.dataset.product) showProduct(button.dataset.product);
-    if (button.dataset.add) add(button.dataset.add);
+    if (button.dataset.add) await add(button.dataset.add);
     if (button.dataset.save) {
       const id = button.dataset.save;
-      state.saved = state.saved.includes(id) ? state.saved.filter(s => s !== id) : [...state.saved, id];
-      persist(); renderCollection();
-      (document.querySelector(`[data-save="${id}"]`) || document.querySelector('.saved-filter')).focus();
+      if (!byId(id)) return;
+      await changeState(current => { current.saved = current.saved.includes(id) ? current.saved.filter(s => s !== id) : [...current.saved, id]; return current; });
+      renderCollection();
+      (document.querySelector(`[data-save="${CSS.escape(id)}"]`) || document.querySelector('.saved-filter')).focus();
       announce(state.saved.includes(id) ? 'Saved to your favourite pieces' : 'Removed from saved pieces');
     }
     if (button.dataset.filter) { filter = button.dataset.filter; renderCollection(); }
     if (button.dataset.occasion) { occasion = button.dataset.occasion; filter = 'All'; query = ''; document.querySelector('#collection-search').value = ''; showSaved = false; renderCollection(); document.querySelector('#collection').scrollIntoView(); }
     if (button.dataset.quantity) {
       const id = button.dataset.quantity, delta = Number(button.dataset.delta);
-      state.bag = updateBag(state.bag, id, delta); persist(); showBag();
-      (modal.querySelector(`[data-quantity="${id}"][data-delta="${delta}"]:not(:disabled)`) || modal.querySelector(`[data-quantity="${id}"]`) || modal.querySelector('.close-button')).focus();
+      await changeState(current => { current.bag = updateBag(current.bag, id, delta); return current; }); showBag();
+      (modal.querySelector(`[data-quantity="${CSS.escape(id)}"][data-delta="${delta}"]:not(:disabled)`) || modal.querySelector(`[data-quantity="${CSS.escape(id)}"]`) || modal.querySelector('.close-button')).focus();
     }
-    if (button.dataset.remove) { state.bag = state.bag.filter(l => l.id !== button.dataset.remove); persist(); showBag(); }
+    if (button.dataset.remove) { await changeState(current => { current.bag = current.bag.filter(l => l.id !== button.dataset.remove); return current; }); showBag(); }
   });
-  document.addEventListener('input', event => {
+  document.addEventListener('input', async event => {
     if (event.target.id === 'gift-search') renderSearch(event.target.value);
     if (event.target.id === 'collection-search') { query = event.target.value; renderCollection(); }
-    if (event.target.id === 'gift-note') { state.note = event.target.value.slice(0,240); persist(); }
+    if (event.target.id === 'gift-note') { const note = event.target.value.slice(0,240); await changeState(current => { current.note = note; return current; }); }
   });
   document.querySelector('#collection-sort').addEventListener('change', event => { sort = event.target.value; renderCollection(); });
   document.addEventListener('submit', event => {
@@ -172,11 +213,11 @@
       announce('Your brief is ready to save. Nothing has been submitted.');
     }
   });
-  modal.addEventListener('close', () => { document.body.classList.remove('modal-open'); if (returnFocus?.isConnected) returnFocus.focus(); });
+  modal.addEventListener('close', () => { document.body.classList.remove('modal-open'); if (returnFocus?.isConnected) returnFocus.focus(); else document.querySelector('[data-filter="All"]').focus(); });
   modal.addEventListener('click', event => {
     const r = modal.getBoundingClientRect();
     if (event.target === modal && (event.clientX < r.left || event.clientX > r.right || event.clientY < r.top || event.clientY > r.bottom)) modal.close();
   });
   document.querySelector('#year').textContent = new Date().getFullYear();
-  persist(); renderCollection();
+  refreshCounts(); renderCollection();
 })();

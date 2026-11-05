@@ -52,3 +52,22 @@ Original concept images generated with the built-in image generation tool, then 
 - `dist/assets/floral-poetry.jpg`: burgundy calla lilies, cream rose and olive foliage in a ceramic vase beside a ribboned gift.
 
 No imagery was copied from the reference retailers. Typeface licences are included in `dist/assets/`.
+
+## Development checks
+
+Use Node 22 (`.nvmrc`) and Python 3 for the browser-test server. Hosting still requires no install or build.
+
+```sh
+npm ci
+npm test
+npx playwright install chromium
+npm run test:browser
+```
+
+GitHub Actions runs both suites on pushes and pull requests. Browser checks cover shopping/downloads, mobile navigation, cross-tab updates, blocked storage, and catalogue escaping. The optional artwork exporter is separate from these checks and still requires `@napi-rs/canvas` if used.
+
+## Local data behavior
+
+`dist/storage.js` owns browser persistence. Each mutation reloads current saved data; Web Locks serialize changes across tabs on supported secure origins (HTTPS or localhost). Storage events refresh other tabs. Browsers without Web Locks still reload before writing, but simultaneous writes across tabs are best-effort. Gift-note edits use last-write-wins semantics.
+
+If storage is unavailable, changes remain in memory for the visit and a warning offers a downloadable copy. Clearing data removes the storage key and verifies removal; failures explicitly direct the user to browser site-data settings. Startup never writes an old snapshot back to storage.
